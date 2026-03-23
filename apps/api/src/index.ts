@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express, { Request, Response } from "express";
 import { createClient } from "@supabase/supabase-js";
+import Groq from "groq-sdk";
 import { z } from "zod";
 
 dotenv.config();
@@ -37,6 +38,8 @@ if (!supabaseUrl || !supabasePublishableKey || !supabaseServiceRoleKey) {
 
 const authClient = createClient(supabaseUrl, supabasePublishableKey);
 const dbClient = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const app = express();
 
@@ -447,6 +450,33 @@ app.post("/api/member/registrations", async (request, response) => {
   }
 
   response.status(201).json({ message: "Registration successful." } satisfies AuthResponse);
+});
+
+const groqMessageSchema = z.object({
+  message: z.string().min(1).max(2000)
+});
+
+app.post("/api/groq/chat", async (request, response) => {
+  const parsed = groqMessageSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    response.status(400).json({ error: "Message is required (1-2000 characters)." });
+    return;
+  }
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: parsed.data.message }],
+      max_tokens: 1024
+    });
+
+    const reply = completion.choices[0]?.message?.content ?? "No response.";
+    response.json({ reply });
+  } catch (error) {
+    console.error("Groq API error:", error);
+    response.status(500).json({ error: "Failed to get a response from Groq." });
+  }
 });
 
 app.listen(port, () => {

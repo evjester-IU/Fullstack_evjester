@@ -78,6 +78,10 @@ export default function App() {
 
   const [registeringClassId, setRegisteringClassId] = useState<string | null>(null);
 
+  const [groqQuestion, setGroqQuestion] = useState("");
+  const [groqReply, setGroqReply] = useState("");
+  const [groqLoading, setGroqLoading] = useState(false);
+
   const dashboardTitle = useMemo(() => {
     if (!currentRole) {
       return "Community Classes";
@@ -292,6 +296,32 @@ export default function App() {
     }
   }
 
+  async function handleGroqSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setGroqLoading(true);
+    setGroqReply("");
+
+    try {
+      const response = await fetch(apiUrl("/api/groq/chat"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: groqQuestion })
+      });
+
+      const data = await parseApiJson<{ reply?: string; error?: string }>(response);
+      if (!response.ok) {
+        setGroqReply(data.error ?? "Something went wrong.");
+        return;
+      }
+
+      setGroqReply(data.reply ?? "No response.");
+    } catch {
+      setGroqReply("Could not reach the API.");
+    } finally {
+      setGroqLoading(false);
+    }
+  }
+
   function logout() {
     setAccessToken(null);
     setCurrentRole(null);
@@ -489,6 +519,29 @@ export default function App() {
         )}
 
         {status && <p className="status">{status}</p>}
+
+        {accessToken && (
+          <section className="stack">
+            <h2 className="groq-heading">Ask Groq</h2>
+            <form onSubmit={handleGroqSubmit} className="stack">
+              <textarea
+                placeholder="Ask anything..."
+                value={groqQuestion}
+                onChange={(event) => setGroqQuestion(event.target.value)}
+                rows={3}
+                required
+              />
+              <button type="submit" disabled={groqLoading}>
+                {groqLoading ? "Thinking..." : "Ask Groq"}
+              </button>
+            </form>
+            {groqReply && (
+              <div className="groq-response">
+                <p>{groqReply}</p>
+              </div>
+            )}
+          </section>
+        )}
       </section>
     </main>
   );
